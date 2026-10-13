@@ -63,7 +63,7 @@ textarea{flex:1;min-width:0;resize:none;max-height:120px;line-height:1.35}
 <main id="list" aria-live="polite"><div class="empty"><b>Noch keine Nachrichten</b>Schreib die erste – feuer die Läufer an!</div></main>
 <footer>
   <div class="err" id="err"></div>
-  <div class="nm-row" id="nmRow"><span>Dein Name:</span><input id="nm" maxlength="30" placeholder="z. B. Anna" autocomplete="nickname"></div>
+  <div class="nm-row" id="nmRow"><input id="nm" maxlength="30" placeholder="Dein Name" aria-label="Dein Name" autocomplete="nickname"></div>
   <div class="bar">
     <textarea id="tx" rows="1" maxlength="500" placeholder="Nachricht schreiben …" aria-label="Nachricht"></textarea>
     <button class="btn primary" id="send">Senden</button>
