@@ -63,6 +63,7 @@ textarea{flex:1;min-width:0;resize:none;max-height:120px;line-height:1.35}
 .acts button{background:none;border:none;color:var(--muted2);font-size:11px;cursor:pointer;text-decoration:underline;padding:0}
 .acts button:hover{color:var(--text)}
 .acts button.warn{color:#FF6B5B}
+.txt.gone{font-style:italic;color:var(--muted2)}
 .ed{width:100%;min-width:220px;margin-top:4px;font-size:15px;background:var(--bg)}
 .msg .acts{margin-top:4px}
 </style>
@@ -112,11 +113,11 @@ function render(){
   let last='',h='';
   for(const [id,m] of arr){const d=dy(m.t);if(d!==last){h+=`<div class="day">${esc(d)}</div>`;last=d}
     const own=!!MINE[id],acts=[];
-    if(own&&editing!==id)acts.push(`<button data-ed="${id}">bearbeiten</button>`);
-    if(orga&&editing!==id)acts.push(`<button data-del="${id}">löschen</button>`);
+    if(own&&editing!==id&&!m.d)acts.push(`<button data-ed="${id}">bearbeiten</button><button data-sd="${id}">löschen</button>`);
+    if(orga&&editing!==id&&!own)acts.push(`<button data-del="${id}">${m.d?'entfernen':'löschen'}</button>`);
     const body=editing===id
       ?`<textarea class="ed" id="edT" maxlength="500" rows="2">${esc(editVal)}</textarea><div class="acts"><button data-save="${id}">speichern</button><button data-cancel>abbrechen</button></div>`
-      :`<div class="txt">${esc(m.m)}</div>${m.e||acts.length?`<div class="meta">${m.e?'<span>bearbeitet</span>':''}${acts.length?`<span class="acts">${acts.join('')}</span>`:''}</div>`:''}`;
+      :`<div class="txt${m.d?' gone':''}">${m.d?'Nachricht gelöscht':esc(m.m)}</div>${(m.e&&!m.d)||acts.length?`<div class="meta">${m.e&&!m.d?'<span>bearbeitet</span>':''}${acts.length?`<span class="acts">${acts.join('')}</span>`:''}</div>`:''}`;
     h+=m.o?`<div class="msg orga"><div class="who"><span class="badge">ORGA-TEAM</span><time>${tm(m.t)}</time></div>${body}</div>`
       :`<div class="msg" style="--c:${col(m.n)}"><div class="who"><b>${esc(m.n)}</b><time>${tm(m.t)}</time></div>${body}</div>`}
   list.innerHTML=h;if(atBottom||render.first!==false){list.scrollTop=list.scrollHeight;render.first=false}
@@ -129,22 +130,30 @@ list.addEventListener('click',async e=>{
   if(b.dataset.save){const id=b.dataset.save,v=(document.getElementById('edT').value||'').trim().slice(0,500);
     if(!v||v===msgs[id].m){editing=null;render();return}
     const r=await patch({['chat/'+id+'/m']:v,['chat/'+id+'/e']:{'.sv':'timestamp'},['etok/'+id]:TOK});
-    if(r.ok){editing=null;render()}else $('err').textContent='Ändern hat nicht geklappt.';return}
+    if(r.ok){msgs[id].m=v;msgs[id].e=Date.now();editing=null;render()}else $('err').textContent='Ändern hat nicht geklappt.';return}
+  if(b.dataset.sd){const id=b.dataset.sd;
+    if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='wirklich löschen?';b.classList.add('warn');setTimeout(()=>{if(b.isConnected){b.dataset.sure='';b.textContent='löschen';b.classList.remove('warn')}},4000);return}
+    const r=await patch({['chat/'+id+'/d']:true,['chat/'+id+'/m']:'-',['chat/'+id+'/e']:{'.sv':'timestamp'},['etok/'+id]:TOK});
+    if(r.ok){Object.assign(msgs[id],{d:true,m:'-',e:Date.now()});render()}else $('err').textContent='Löschen hat nicht geklappt.';return}
   if(b.dataset.del){const id=b.dataset.del;
     if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='wirklich löschen?';b.classList.add('warn');setTimeout(()=>{if(b.isConnected){b.dataset.sure='';b.textContent='löschen';b.classList.remove('warn')}},4000);return}
     const r=await patch({['chat/'+id]:null,['dkeys/'+id]:orga});
-    if(!r.ok){$('err').textContent='Löschen hat nicht geklappt – Orga-Code prüfen.'}}
+    if(!r.ok){$('err').textContent='Löschen hat nicht geklappt – Orga-Code prüfen.'}else{delete msgs[id];render()}}
 });
 function setSt(on,t){$('dot').classList.toggle('on',on);$('st').textContent=t}
 let es;
 function connect(){
   try{es&&es.close()}catch(e){}
-  es=new EventSource(DB+'.json?orderBy=%22t%22&limitToLast=300');
+  es=new EventSource(DB+'.json');
   es.addEventListener('open',()=>setSt(true,'live'));
-  const apply=(type,e)=>{const {path,data}=JSON.parse(e.data);
-    if(path==='/'){if(type==='put')for(const k in msgs)delete msgs[k];if(data)Object.assign(msgs,data)}
-    else{const k=path.split('/')[1];if(data===null)delete msgs[k];else if(type==='put'&&path.split('/').length===2)msgs[k]=data;else msgs[k]=Object.assign(msgs[k]||{},data)}
-    render()};
+  // Firebase-Stream: put = Wert an Pfad ersetzen, patch = Kinder am Pfad zusammenführen
+  const setAt=(path,val,merge)=>{const ks=path.split('/').filter(Boolean);
+    if(!ks.length){if(!merge)for(const k in msgs)delete msgs[k];if(val&&typeof val==='object')for(const k in val){if(val[k]===null)delete msgs[k];else msgs[k]=merge&&msgs[k]?Object.assign(msgs[k],val[k]):val[k]}return}
+    let o=msgs;for(let i=0;i<ks.length-1;i++){if(o[ks[i]]==null||typeof o[ks[i]]!=='object')o[ks[i]]={};o=o[ks[i]]}
+    const last=ks[ks.length-1];
+    if(merge&&val&&typeof val==='object'){o[last]=o[last]&&typeof o[last]==='object'?o[last]:{};for(const k in val){if(val[k]===null)delete o[last][k];else o[last][k]=val[k]}}
+    else if(val===null)delete o[last];else o[last]=val};
+  const apply=(type,e)=>{const {path,data}=JSON.parse(e.data);setAt(path,data,type==='patch');render()};
   es.addEventListener('put',e=>apply('put',e));
   es.addEventListener('patch',e=>apply('patch',e));
   es.addEventListener('error',()=>setSt(false,'verbinde …'));
