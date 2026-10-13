@@ -57,6 +57,14 @@ textarea{flex:1;min-width:0;resize:none;max-height:120px;line-height:1.35}
 .err:empty{display:none}
 @media(max-width:440px){#st{display:none}.ttl{font-size:18px}header{padding-left:12px;padding-right:12px}}
 [hidden]{display:none!important}
+.meta{display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-top:3px;font-size:11px;color:var(--muted2)}
+.msg.orga .meta{justify-content:flex-start}
+.acts{display:inline-flex;gap:10px}
+.acts button{background:none;border:none;color:var(--muted2);font-size:11px;cursor:pointer;text-decoration:underline;padding:0}
+.acts button:hover{color:var(--text)}
+.acts button.warn{color:#FF6B5B}
+.ed{width:100%;min-width:220px;margin-top:4px;font-size:15px;background:var(--bg)}
+.msg .acts{margin-top:4px}
 </style>
 </head>
 <body>
@@ -89,17 +97,44 @@ const PAL=['#F2A65A','#7FB3D5','#C39BD3','#F4D35E','#5FD3BC','#F1948A','#9AA5FF'
 let CM={};const col=n=>{const k=String(n).trim().toLowerCase();if(!(k in CM))CM[k]=Object.keys(CM).length;return PAL[CM[k]%PAL.length]};
 const tm=t=>new Date(t).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
 const dy=t=>new Date(t).toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'});
+let TOK='',MINE={};
+try{TOK=localStorage.getItem('by-tok')||'';if(!TOK){TOK=Array.from(crypto.getRandomValues(new Uint8Array(18)),b=>b.toString(16).padStart(2,'0')).join('');localStorage.setItem('by-tok',TOK)}MINE=JSON.parse(localStorage.getItem('by-mine')||'{}')}catch(e){if(!TOK)TOK=Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2)}
+const ROOT=DB.replace(/\/chat$/,'');
+const patch=b=>fetch(ROOT+'/.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+let editing=null,editVal='';
 function render(){
+  if(editing){const t=document.getElementById('edT');if(t)editVal=t.value}
   const arr=Object.entries(msgs).filter(([,m])=>m&&m.t).sort((a,b)=>a[1].t-b[1].t);
   const atBottom=list.scrollHeight-list.scrollTop-list.clientHeight<80;
   if(!arr.length){list.innerHTML='<div class="empty"><b>Noch keine Nachrichten</b>Schreib die erste – feuer die Läufer an!</div>';return}
   CM={};arr.forEach(([,m])=>{if(!m.o)col(m.n)});
+  if(editing&&!msgs[editing])editing=null;
   let last='',h='';
-  for(const [,m] of arr){const d=dy(m.t);if(d!==last){h+=`<div class="day">${esc(d)}</div>`;last=d}
-    h+=m.o?`<div class="msg orga"><div class="who"><span class="badge">ORGA-TEAM</span><time>${tm(m.t)}</time></div><div class="txt">${esc(m.m)}</div></div>`
-      :`<div class="msg" style="--c:${col(m.n)}"><div class="who"><b>${esc(m.n)}</b><time>${tm(m.t)}</time></div><div class="txt">${esc(m.m)}</div></div>`}
+  for(const [id,m] of arr){const d=dy(m.t);if(d!==last){h+=`<div class="day">${esc(d)}</div>`;last=d}
+    const own=!!MINE[id],acts=[];
+    if(own&&editing!==id)acts.push(`<button data-ed="${id}">bearbeiten</button>`);
+    if(orga&&editing!==id)acts.push(`<button data-del="${id}">löschen</button>`);
+    const body=editing===id
+      ?`<textarea class="ed" id="edT" maxlength="500" rows="2">${esc(editVal)}</textarea><div class="acts"><button data-save="${id}">speichern</button><button data-cancel>abbrechen</button></div>`
+      :`<div class="txt">${esc(m.m)}</div>${m.e||acts.length?`<div class="meta">${m.e?'<span>bearbeitet</span>':''}${acts.length?`<span class="acts">${acts.join('')}</span>`:''}</div>`:''}`;
+    h+=m.o?`<div class="msg orga"><div class="who"><span class="badge">ORGA-TEAM</span><time>${tm(m.t)}</time></div>${body}</div>`
+      :`<div class="msg" style="--c:${col(m.n)}"><div class="who"><b>${esc(m.n)}</b><time>${tm(m.t)}</time></div>${body}</div>`}
   list.innerHTML=h;if(atBottom||render.first!==false){list.scrollTop=list.scrollHeight;render.first=false}
+  const t=document.getElementById('edT');if(t&&document.activeElement!==t&&render.focusEd){t.focus();t.setSelectionRange(t.value.length,t.value.length);render.focusEd=false}
 }
+list.addEventListener('click',async e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.ed){editing=b.dataset.ed;editVal=msgs[editing].m;render.focusEd=true;render();return}
+  if(b.dataset.cancel!==undefined){editing=null;render();return}
+  if(b.dataset.save){const id=b.dataset.save,v=(document.getElementById('edT').value||'').trim().slice(0,500);
+    if(!v||v===msgs[id].m){editing=null;render();return}
+    const r=await patch({['chat/'+id+'/m']:v,['chat/'+id+'/e']:{'.sv':'timestamp'},['etok/'+id]:TOK});
+    if(r.ok){editing=null;render()}else $('err').textContent='Ändern hat nicht geklappt.';return}
+  if(b.dataset.del){const id=b.dataset.del;
+    if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='wirklich löschen?';b.classList.add('warn');setTimeout(()=>{if(b.isConnected){b.dataset.sure='';b.textContent='löschen';b.classList.remove('warn')}},4000);return}
+    const r=await patch({['chat/'+id]:null,['dkeys/'+id]:orga});
+    if(!r.ok){$('err').textContent='Löschen hat nicht geklappt – Orga-Code prüfen.'}}
+});
 function setSt(on,t){$('dot').classList.toggle('on',on);$('st').textContent=t}
 let es;
 function connect(){
@@ -124,11 +159,14 @@ async function send(){
   if(!me&&!orga){$('err').textContent='Bitte zuerst deinen Namen eintragen.';nm.focus();return}
   $('err').textContent='';$('send').disabled=true;
   try{
-    const msg={n:orga?'Orga-Team':me.slice(0,30),m:m.slice(0,500),t:{'.sv':'timestamp'}};let r;
-    if(orga){const id=Date.now().toString(36)+Math.random().toString(36).slice(2,10);msg.o=true;
-      r=await fetch(DB.replace(/\/chat$/,'')+'/.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({['chat/'+id]:msg,['okeys/'+id]:orga})});
-      if(r.status===401){orga='';try{localStorage.removeItem('by-orga')}catch(e){};orgaUI();throw new Error('code')}}
-    else r=await fetch(DB+'.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(msg)});
+    const msg={n:orga?'Orga-Team':me.slice(0,30),m:m.slice(0,500),t:{'.sv':'timestamp'}};
+    const id=Date.now().toString(36)+Math.random().toString(36).slice(2,10);
+    const up={['chat/'+id]:msg,['ekeys/'+id]:TOK};
+    if(orga){msg.o=true;up['okeys/'+id]=orga}
+    MINE[id]=1;try{localStorage.setItem('by-mine',JSON.stringify(MINE))}catch(e){}
+    const r=await patch(up);
+    if(!r.ok){delete MINE[id];try{localStorage.setItem('by-mine',JSON.stringify(MINE))}catch(e){}}
+    if(r.status===401&&orga){orga='';try{localStorage.removeItem('by-orga')}catch(e){};orgaUI();throw new Error('code')}
     if(!r.ok)throw new Error(r.status);
     tx.value='';tx.style.height='auto';list.scrollTop=list.scrollHeight;
   }catch(e){$('err').textContent=e.message==='code'?'Orga-Code stimmt nicht – Nachricht nicht gesendet.':'Senden hat nicht geklappt – bitte nochmal versuchen.'}
@@ -138,6 +176,7 @@ let orga='';try{orga=localStorage.getItem('by-orga')||''}catch(e){}
 function orgaUI(){
   const r=$('orgaRow');
   $('nmRow').hidden=!!orga;
+  render();
   r.innerHTML=orga?`<span class="orga-on">Du schreibst als Orga</span><button id="oOut">abmelden</button>`:`<button id="oIn">Orga-Login</button>`;
   if(orga)$('oOut').onclick=()=>{orga='';try{localStorage.removeItem('by-orga')}catch(e){};orgaUI()};
   else $('oIn').onclick=()=>{r.innerHTML=`<input id="oCode" placeholder="Orga-Code" autocomplete="off"><button id="oOk">OK</button><button id="oNo">abbrechen</button>`;
