@@ -76,7 +76,7 @@ textarea{flex:1;min-width:0;resize:none;max-height:120px;line-height:1.35}
     <a class="btn" id="back" href="https://claude.ai/artifact/AaJWDaipio1Q8hwTZDc2q6">← Live</a>
   </div>
 </header>
-<main id="list" aria-live="polite"><div class="empty"><b>Noch keine Nachrichten</b>Schreib die erste – feuer die Läufer an!</div></main>
+<main id="list" aria-live="polite"><div class="empty"><b>Noch keine Nachrichten</b></div></main>
 <footer>
   <div class="err" id="err"></div>
   <div class="nm-row" id="nmRow"><input id="nm" maxlength="30" placeholder="Dein Name" aria-label="Dein Name" autocomplete="nickname"></div>
@@ -107,7 +107,7 @@ function render(){
   if(editing){const t=document.getElementById('edT');if(t)editVal=t.value}
   const arr=Object.entries(msgs).filter(([,m])=>m&&m.t).sort((a,b)=>a[1].t-b[1].t);
   const atBottom=list.scrollHeight-list.scrollTop-list.clientHeight<80;
-  if(!arr.length){list.innerHTML='<div class="empty"><b>Noch keine Nachrichten</b>Schreib die erste – feuer die Läufer an!</div>';return}
+  if(!arr.length){list.innerHTML='<div class="empty"><b>Noch keine Nachrichten</b></div>';return}
   CM={};arr.forEach(([,m])=>{if(!m.o)col(m.n)});
   if(editing&&!msgs[editing])editing=null;
   let last='',h='';
