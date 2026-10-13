@@ -72,7 +72,7 @@ textarea{flex:1;min-width:0;resize:none;max-height:120px;line-height:1.35}
   <div class="ttl"><b>BACKYARD</b><span>|</span>CHAT</div>
   <div style="display:flex;gap:10px;align-items:center">
     <span class="live"><span class="dot" id="dot"></span><span id="st">verbinde …</span></span>
-    <a class="btn" href="https://claude.ai/artifact/AaJWDaipio1Q8hwTZDc2q6">← Live</a>
+    <a class="btn" id="back" href="https://claude.ai/artifact/AaJWDaipio1Q8hwTZDc2q6">← Live</a>
   </div>
 </header>
 <main id="list" aria-live="polite"><div class="empty"><b>Noch keine Nachrichten</b>Schreib die erste – feuer die Läufer an!</div></main>
@@ -185,6 +185,11 @@ function orgaUI(){
 }
 orgaUI();
 upd();
+/* „← Live": wurde der Chat aus der Live-Seite geöffnet, diesen Tab schließen und zurück – sonst normal hinwechseln */
+$('back').addEventListener('click',e=>{
+  if(window.opener||history.length<=1){e.preventDefault();try{window.opener&&window.opener.focus()}catch(_){}
+    window.close();setTimeout(()=>{location.href=$('back').href},300)}
+});
 </script>
 </body>
 </html>
