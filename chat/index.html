@@ -125,7 +125,7 @@ function render(){
   for(const [id,m] of arr){const d=dy(m.t);if(d!==last){h+=`<div class="day">${esc(d)}</div>`;last=d}
     const own=!!MINE[id],acts=[];
     if(own&&editing!==id&&!m.d)acts.push(`<button data-ed="${id}">bearbeiten</button><button data-sd="${id}">löschen</button>`);
-    if(orga&&editing!==id&&!own)acts.push(`<button data-del="${id}">${m.d?'entfernen':'löschen'}</button>`);
+    if(orga&&editing!==id&&(!own||m.d))acts.push(`<button data-del="${id}">${m.d?'entfernen':'löschen'}</button>`);
     const body=editing===id
       ?`<textarea class="ed" id="edT" maxlength="500" rows="2">${esc(editVal)}</textarea><div class="acts"><button data-save="${id}">speichern</button><button data-cancel>abbrechen</button></div>`
       :`<div class="txt${m.d?' gone':''}">${m.d?'Nachricht gelöscht':esc(m.m)}</div><div class="meta">${m.e&&!m.d?'<span>bearbeitet</span>':''}${acts.length?`<span class="acts">${acts.join('')}</span>`:''}${m.d?'':likeBtn(id)}</div>`;
